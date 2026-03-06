@@ -1,0 +1,106 @@
+
+services:
+  # === Attack #1: SQL Injection ===
+  sqli_normal:
+    build: ./01_sqli_cmd_exec
+    container_name: sqli_normal
+    environment:
+      - MODE=normal
+      - DURATION=120s
+    ports:
+      - "8081:8080"
+    profiles: ["normal"]
+
+  sqli_attack:
+    build: ./01_sqli_cmd_exec
+    container_name: sqli_attack
+    environment:
+      - MODE=attack
+      - DURATION=120s
+    ports:
+      - "8091:8080"
+    profiles: ["attack"]
+
+  # === Attack #2: Reverse Shell ===
+  revshell_normal:
+    build: ./02_reverse_shell
+    container_name: revshell_normal
+    environment:
+      - MODE=normal
+      - DURATION=120s
+    ports:
+      - "9081:9090"
+    profiles: ["normal"]
+
+  revshell_attack:
+    build: ./02_reverse_shell
+    container_name: revshell_attack
+    environment:
+      - MODE=attack
+      - DURATION=120s
+    ports:
+      - "9091:9090"
+    profiles: ["attack"]
+
+  # === Attack #3: Path Traversal ===
+  pathtraversal_normal:
+    build: ./03_path_traversal
+    container_name: pathtraversal_normal
+    environment:
+      - MODE=normal
+      - DURATION=120s
+    ports:
+      - "8082:8080"
+    profiles: ["normal"]
+
+  pathtraversal_attack:
+    build: ./03_path_traversal
+    container_name: pathtraversal_attack
+    environment:
+      - MODE=attack
+      - DURATION=120s
+    ports:
+      - "8092:8080"
+    profiles: ["attack"]
+
+  # === Attack #4: Data Exfiltration ===
+  exfil_normal:
+    build: ./04_data_exfiltration
+    container_name: exfil_normal
+    environment:
+      - MODE=normal
+      - DURATION=120s
+    ports:
+      - "8083:8080"
+    profiles: ["normal"]
+
+  exfil_attack:
+    build: ./04_data_exfiltration
+    container_name: exfil_attack
+    environment:
+      - MODE=attack
+      - DURATION=120s
+    ports:
+      - "8093:8080"
+    profiles: ["attack"]
+
+  # === Attack #5: Cryptominer Dropper ===
+  dropper_normal:
+    build: ./05_cryptominer_dropper
+    container_name: dropper_normal
+    environment:
+      - MODE=normal
+      - DURATION=120s
+    ports:
+      - "8084:8080"
+    profiles: ["normal"]
+
+  dropper_attack:
+    build: ./05_cryptominer_dropper
+    container_name: dropper_attack
+    environment:
+      - MODE=attack
+      - DURATION=120s
+    ports:
+      - "8094:8080"
+    profiles: ["attack"]
