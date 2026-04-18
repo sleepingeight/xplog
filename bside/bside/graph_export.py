@@ -254,8 +254,14 @@ def build_syscall_graph(precise_cfg: nx.DiGraph,
     block_syscalls = _find_syscall_site_blocks(per_site_syscalls, site_to_block)
     syscall_blocks = set(block_syscalls.keys())
 
+    # Ensure all identified syscalls are in the graph nodes,
+    # even if they have no outgoing/incoming transitions.
+    for sc_set in per_site_syscalls.values():
+        for sc in sc_set:
+            graph.syscall_set.add(sc)
+
     if not syscall_blocks:
-        logger.warning("No syscall blocks found, returning empty graph")
+        logger.warning("No syscall blocks found, returning graph with nodes only")
         return graph
 
     # For each syscall block, find the next reachable syscall blocks
