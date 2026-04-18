@@ -19,6 +19,7 @@ type Label struct {
 	Timestamp int64  `json:"ts"`
 	Type      string `json:"type"`
 	Detail    string `json:"detail"`
+	AttackPID int    `json:"attack_pid"`
 }
 
 var (
@@ -74,12 +75,6 @@ func handleConnection(conn net.Conn) {
 // simulateReverseShell emulates the syscall pattern of a reverse shell.
 // This produces: socket -> connect -> dup2 x3 -> execve
 func simulateReverseShell() {
-	writeLabel(Label{
-		Timestamp: time.Now().UnixNano(),
-		Type:      "reverse_shell",
-		Detail:    "socket->connect->dup2x3->execve",
-	})
-
 	// Phase 1: Create a socket and connect to "C2" (localhost:19999).
 	// We start a temporary listener to accept our connection.
 	c2Listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -142,12 +137,21 @@ func simulateReverseShell() {
 
 	// Phase 3: execve — execute a shell command.
 	cmd := exec.Command("sh", "-c", "echo 'reverse_shell_simulated' && sleep 0.1")
-	output, err := cmd.CombinedOutput()
+	err = cmd.Start()
 	if err != nil {
 		log.Printf("[ATTACK] execve error: %v", err)
-	} else {
-		log.Printf("[ATTACK] Shell output: %s", string(output))
+		return
 	}
+
+	writeLabel(Label{
+		Timestamp: time.Now().UnixNano(),
+		Type:      "reverse_shell",
+		Detail:    "socket->connect->dup2x3->execve",
+		AttackPID: cmd.Process.Pid,
+	})
+
+	cmd.Process.Wait()
+	log.Printf("[ATTACK] Shell finished (PID %d)", cmd.Process.Pid)
 }
 
 // normalTrafficGenerator sends echo messages to the server.

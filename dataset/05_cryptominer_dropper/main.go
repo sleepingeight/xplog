@@ -20,6 +20,7 @@ type Label struct {
 	Type      string `json:"type"`
 	Detail    string `json:"detail"`
 	Phase     int    `json:"phase"`
+	AttackPID int    `json:"attack_pid"`
 }
 
 var (
@@ -88,13 +89,13 @@ func fakeC2Server() net.Listener {
 func dropperLifecycle(stopCh <-chan struct{}, c2Addr string) {
 	phases := []struct {
 		name string
-		fn   func(c2Addr string) error
+		fn   func(c2Addr string) (int, error)
 	}{
-		{"c2_beacon", phaseBeacon},
-		{"download_payload", phaseDownload},
-		{"write_to_disk", phaseWriteToDisk},
+		{"c2_beacon", func(a string) (int, error) { return os.Getpid(), phaseBeacon(a) }},
+		{"download_payload", func(a string) (int, error) { return os.Getpid(), phaseDownload(a) }},
+		{"write_to_disk", func(a string) (int, error) { return os.Getpid(), phaseWriteToDisk(a) }},
 		{"execute_payload", phaseExecute},
-		{"cleanup", phaseCleanup},
+		{"cleanup", func(a string) (int, error) { return os.Getpid(), phaseCleanup(a) }},
 	}
 
 	for cycle := 0; ; cycle++ {
@@ -117,16 +118,19 @@ func dropperLifecycle(stopCh <-chan struct{}, c2Addr string) {
 			}
 
 			log.Printf("[ATTACK] Phase %d: %s", i+1, phase.name)
+			
+			pid, err := phase.fn(c2Addr)
+			
 			writeLabel(Label{
 				Timestamp: time.Now().UnixNano(),
 				Type:      "dropper_" + phase.name,
 				Detail:    fmt.Sprintf("cycle=%d", cycle),
 				Phase:     i + 1,
+				AttackPID: pid,
 			})
 
-			if err := phase.fn(c2Addr); err != nil {
+			if err != nil {
 				log.Printf("[ATTACK] Phase %d failed: %v", i+1, err)
-				// In a real dropper, failure might mean aborting or retrying later.
 				break
 			}
 		}
@@ -216,16 +220,22 @@ func phaseWriteToDisk(c2Addr string) error {
 }
 
 // Phase 4: Execute — clone/fork -> execve
-func phaseExecute(c2Addr string) error {
+func phaseExecute(c2Addr string) (int, error) {
 	// We execute a harmless command that simulates a miner process.
 	// This triggers clone -> execve.
 	cmd := exec.Command("sh", "-c", "echo 'miner_started' && sleep 0.5 && echo 'mining_hash_000abc'")
-	output, err := cmd.CombinedOutput()
+	err := cmd.Start()
 	if err != nil {
-		return fmt.Errorf("execve: %v", err)
+		return 0, fmt.Errorf("execve: %v", err)
 	}
-	log.Printf("[ATTACK] Miner output: %s", string(output))
-	return nil
+	
+	pid := cmd.Process.Pid
+	go func() {
+		cmd.Process.Wait()
+		log.Printf("[ATTACK] Miner finished (PID %d)", pid)
+	}()
+	
+	return pid, nil
 }
 
 // Phase 5: Cleanup — unlinkat

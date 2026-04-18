@@ -19,6 +19,7 @@ type Label struct {
 	Timestamp int64  `json:"ts"`
 	Type      string `json:"type"`
 	Detail    string `json:"detail"`
+	AttackPID int    `json:"attack_pid"`
 }
 
 var (
@@ -80,6 +81,7 @@ func handleFileRequest(w http.ResponseWriter, r *http.Request) {
 				Timestamp: time.Now().UnixNano(),
 				Type:      "path_traversal",
 				Detail:    fmt.Sprintf("requested=%s resolved=%s", requestedPath, resolved),
+				AttackPID: os.Getpid(),
 			})
 			fullPath = resolved
 		}

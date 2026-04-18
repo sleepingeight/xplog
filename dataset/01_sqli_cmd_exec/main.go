@@ -19,6 +19,7 @@ type Label struct {
 	Timestamp int64  `json:"ts"`
 	Type      string `json:"type"`
 	Detail    string `json:"detail"`
+	AttackPID int    `json:"attack_pid"`
 }
 
 var (
@@ -70,19 +71,28 @@ func handleQuery(w http.ResponseWriter, r *http.Request) {
 		// In attack mode, simulate a vulnerable handler that passes unsanitized
 		// input to a shell command (e.g., legacy lookup script).
 		log.Printf("[ATTACK] Executing shell command for user=%s", user)
+
+		// This triggers: clone -> execve -> open -> read -> write
+		cmd := exec.Command("sh", "-c", fmt.Sprintf("echo 'Searching for user: %s' && cat /etc/hostname 2>/dev/null && echo 'Lookup complete'", user))
+		
+		err := cmd.Start()
+		if err != nil {
+			log.Printf("[ATTACK] Failed to start command: %v", err)
+			return
+		}
+
 		writeLabel(Label{
 			Timestamp: time.Now().UnixNano(),
 			Type:      "sqli_exec",
 			Detail:    fmt.Sprintf("sh -c echo Searching for user: %s", user),
+			AttackPID: cmd.Process.Pid,
 		})
 
-		// This triggers: clone -> execve -> open -> read -> write
-		cmd := exec.Command("sh", "-c", fmt.Sprintf("echo 'Searching for user: %s' && cat /etc/hostname 2>/dev/null && echo 'Lookup complete'", user))
-		output, err := cmd.CombinedOutput()
+		_, err = cmd.Process.Wait()
 		if err != nil {
-			fmt.Fprintf(w, "Lookup error: %v\nPartial output: %s\n", err, string(output))
+			fmt.Fprintf(w, "Lookup error: %v\n", err)
 		} else {
-			fmt.Fprintf(w, "Lookup result:\n%s\n", string(output))
+			fmt.Fprintf(w, "Lookup result processed (PID %d)\n", cmd.Process.Pid)
 		}
 		return
 	}

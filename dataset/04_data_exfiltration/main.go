@@ -19,6 +19,7 @@ type Label struct {
 	Timestamp int64  `json:"ts"`
 	Type      string `json:"type"`
 	Detail    string `json:"detail"`
+	AttackPID int    `json:"attack_pid"`
 }
 
 var (
@@ -161,6 +162,7 @@ func exfilGoroutine(stopCh <-chan struct{}, exfilAddr string) {
 				Timestamp: time.Now().UnixNano(),
 				Type:      "data_exfil",
 				Detail:    fmt.Sprintf("file=%s bytes=%d", target, len(data)),
+				AttackPID: os.Getpid(),
 			})
 
 			// Phase 2: Connect to exfil endpoint and send data.
