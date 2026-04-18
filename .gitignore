@@ -11,11 +11,12 @@ env/
 */venv/
 */env/
 */__pycache__/
-
-# B-Side specific
 *.json
 *.log
 bside/bside_files/
 bside/tests/
 tests/sqlite*
 bside/bside/__pycache__/
+uprov.md
+bside/bside.htm
+btp.md
