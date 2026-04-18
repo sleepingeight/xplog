@@ -20,3 +20,6 @@ bside/bside/__pycache__/
 uprov.md
 bside/bside.htm
 btp.md
+venv/
+*.txt
+surya_btp/
