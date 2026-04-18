@@ -118,6 +118,41 @@ class SyscallGraph:
             json.dump(self.to_dict(), f, indent=2)
         logger.info("Syscall graph saved to %s", path)
 
+    def to_dot(self) -> str:
+        """Convert syscall graph to Graphviz DOT format."""
+        lines = [
+            'digraph SyscallCFG {',
+            '    rankdir=LR;',
+            '    node [shape=box, fontname="Courier", style=filled, fillcolor="#f0f0f0"];',
+            '    edge [fontname="Courier", fontsize=10];',
+            ''
+        ]
+        
+        # Add nodes
+        syscalls = sorted(self.syscall_set)
+        for sc in syscalls:
+            name = syscall_name(sc)
+            features = self.node_features.get(sc, {})
+            label = f"{name}\\n(count={features.get('site_count', 1)})"
+            color = "#ffdddd" if features.get('is_in_wrapper') else "#ddffdd"
+            lines.append(f'    sc_{sc} [label="{label}", fillcolor="{color}"];')
+        
+        lines.append('')
+        
+        # Add edges
+        for (src, dst), weight in sorted(self.transitions.items()):
+            label = f"weight={weight}" if weight > 1 else ""
+            lines.append(f'    sc_{src} -> sc_{dst} [label="{label}"];')
+            
+        lines.append('}')
+        return "\n".join(lines)
+
+    def save_dot(self, path: str):
+        """Save graph to DOT file."""
+        with open(path, 'w') as f:
+            f.write(self.to_dot())
+        logger.info("Syscall DOT graph saved to %s", path)
+
     def summary(self) -> str:
         """Human-readable summary."""
         lines = [

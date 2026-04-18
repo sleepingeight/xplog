@@ -71,8 +71,8 @@ def is_static_binary(binary_path: str) -> bool:
         return True  # Default to static if we can't determine
 
 
-def analyze_static(binary_path: str, timeout: int,
-                   do_phases: bool, do_graph: bool = False) -> dict:
+def analyze_static(binary_path: str, timeout: int = 60, do_phases: bool = False,
+                   do_graph: bool = False, dot_path: str = None) -> dict:
     """Analyze a statically compiled binary.
 
     Args:
@@ -194,6 +194,9 @@ def analyze_static(binary_path: str, timeout: int,
 
         output["syscall_graph"] = syscall_graph.to_dict()
         output["step_times"]["graph_export"] = round(graph_time, 2)
+
+        if dot_path:
+            syscall_graph.save_dot(dot_path)
 
     return output
 
@@ -349,6 +352,10 @@ Examples:
         help="Export syscall transition graph (adjacency matrix) for GNN input"
     )
     parser.add_argument(
+        "--dot",
+        help="Export syscall transition graph in Graphviz DOT format (e.g., --dot graph.dot)"
+    )
+    parser.add_argument(
         "--timeout", "-t", type=int, default=60,
         help="Timeout per symbolic execution search in seconds (default: 60)"
     )
@@ -389,7 +396,9 @@ Examples:
     # Run analysis
     try:
         if is_static:
-            output = analyze_static(args.binary, args.timeout, args.phases, args.graph)
+            output = analyze_static(
+                args.binary, args.timeout, args.phases, args.graph, args.dot
+            )
         else:
             output = analyze_dynamic(
                 args.binary, args.timeout, args.phases, args.cache_dir
