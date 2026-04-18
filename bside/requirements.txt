@@ -1,0 +1,4 @@
+angr>=9.2
+networkx>=3.0
+lief>=0.13
+unicorn
