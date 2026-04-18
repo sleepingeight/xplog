@@ -1,134 +1,96 @@
-# XPLOG : A Dynamic Observability Framework for Distributed Edge Applications
+# XPLOG: Distributed Provenance Logging and Attack Detection
 
-A scalable, pluggable, easily deployable, and dynamic runtime observability framework for distributed edge computing platforms that leverages the capability of extended Berkeley Packet Filters (eBPF) to intercept system-level events within the host while capturing and amalgamating relevant ap-
-plication and system logs to produce globally causally-consistent log stream.
+XPLOG is a high-fidelity distributed logging framework designed for microservice architectures. It leverages eBPF for low-overhead syscall tracing and constructs causal provenance graphs to detect Advanced Persistent Threats (APTs) with high sensitivity and zero false alarms.
 
-The XPLOG as 2 components: `XPLOG Agent` and `XPLOG Collector`
+## 1. Project Components
 
-```
-Pluggable_Logging
-├── XPLOG Agent
-└── XPLOG Collector
-```
-## System Configuration:
-- Ubuntu 22.04
-- Linux 6.5.0-41-generic
-- x86-64
-- Number of vCPU cores = 16
-- RAM = 64 GB
-- HDD Size = 500GB (Manager), 250GB (Workers)
+- **Attack Emulators** (`dataset/`): Five Go-based containers simulating real-world exploits (SQLi, Reverse Shell, Path Traversal, Data Exfiltration, and Cryptominer Dropper).
+- **XPLOG Collector**: A central server that aggregates causally-ordered logs from distributed agents.
+- **B-Side Integration**: A static binary analysis tool that provides syscall-level control flow priors.
+- **ML Pipeline**: A Graph Convolutional Network (GCN) that performs causal inference and scenario-level detection.
 
-## Kernel
-- `CONFIG_DEBUG_INFO_BTF=y`
-- Linux Kernel Version 5.8+
+---
 
-## Build Requirements
-If you wish to build the binaries from scratch, your system must satisfy the following requirements:
-- `Docker`
-- `Docker-compose`
-- `libbelf`
-- `zlib`
-- `clang`
-- `docker`
+## 2. Setup and Installation
 
-To install the packages run the following commands in ```Ubuntu```.
-```
-sudo apt install libelf-dev
-sudo apt-get install libpcap-dev
-sudo apt install clang
-sudo apt install binutils-dev
-sudo apt install llvm
+### 2.1 Prerequisites
+- **OS**: Linux (kernel 5.4+ for eBPF support)
+- **Languages**: Go (1.20+), Python (3.10+), Node.js (16+)
+- **Tools**: Docker, Docker Swarm (optional)
+
+### 2.2 Environment Setup
+```bash
+# Clone the repository
+git clone <repo_url>
+cd xplog
+
+# Set up Python virtual environment
+python3 -m venv venv
+source venv/bin/activate
+pip install torch torch-geometric pandas scikit-learn numpy
 ```
 
-## Build XPLOG from source
-1. Run the following command on your shell to clone this repository:
-```
-git clone https://github.com/usatpath01/Pluggable_Logging.git
-```
-Go to XPLOG_Agent Folder
+---
 
-2. Run the following command to clone the submodules of the `libbpf-bootstrap` repo.
-```
-git clone --recurse-submodules https://github.com/libbpf/libbpf-bootstrap
-```
+## 3. Operational Guide
 
-### Building the BPF Binary
-1. Run the following command to build the `libbpf` library, `bpftool`, and the BPF binary.
-```
-cd XPLOG_Agent/libbpf-bootstrap/libbpf/src
-make
-cd XPLOG_Agent/libbpf-bootstrap/bpftool/src
-make
+### Step 1: Build the Attack Emulators
+Each emulator must be compiled to a Go binary to allow B-Side static analysis.
+```bash
+cd dataset/01_sqli_cmd_exec
+go build -o emulator_sqli main.go
+# Repeat for other scenarios (02_reverse_shell, etc.)
 ```
 
-### Building the XPLOG binary
-Go to XPLOG_Agent > src folder and run
-```
-sudo make clean
-sudo make
-sudo make -f xlp.mk
-```
-
-## Running XPLOG
-### Before you start
-- Install Docker and Docker Compose
-- Make sure the following ports are available: port 8086 for collector server.
-- Configure Collector `serverIP` and `serverPort`: Go to Pluggable_Logging > XPLOG_Agent > src > xlp.c
-```
-const char *serverIP = "XXX.XX.XX.X";
-const int serverPort = 8086;
-```
-### Start docker containers on single machine with ```docker-compose```
-Start docker containers by running 
-```
-docker compose -f docker-compose.yml build 
-docker compose -f docker-compose.yml up 
+### Step 2: Extract Static Priors (B-Side)
+Run B-Side on the generated binaries to create the syscall "Safe List."
+```bash
+# Note: Ensure B-Side toolkit is in your PATH
+./scripts/run_bside.sh ./dataset/01_sqli_cmd_exec/emulator_sqli
+# This generates .json files in bside_outputs/
 ```
 
-### Start docker containers with docker swarm
-Before starting the containers, make sure:
-1. You are on the Manager node of the docker swarm nodes.
-2. You have cloned the Pluggable_Logging repository.
-```
-docker compose -f docker-compose-collector.yml build
-docker compose -f docker-compose-collector.yml up -d
+### Step 3: Collect Runtime Logs
+Start the XPLOG server and run the emulators for ~60 seconds to generate the training dataset.
+```bash
+# Start XPLOG Server
+PYTHONPATH=. python3 XPLOG_Collector/server.py
+
+# In another terminal, run an emulator
+./dataset/01_sqli_cmd_exec/emulator_sqli --mode attack --duration 60s
 ```
 
-3. Once the collector server is up, run the XPLOG_Agent in each worker node where the microservice application containers run.
-```
-docker compose -f docker-compose-agent.yml build
-docker compose -f docker-compose-agent.yml up
-```
-
-### To Test the logging framework with Application:
-```
-git clone https://github.com/usatpath01/DeathStarBench_XLP.git
-sudo docker stack deploy --compose-file=docker-compose-swarm.yml dsb
+### Step 4: Feature Extraction
+Convert the raw JSON logs into provenance-enriched feature sets.
+```bash
+# Using the μProv-style graph extractor
+PYTHONPATH=. python3 XPLOG_Collector/scripts/feature_extractor_v2.py
+# Output: datasets/full_features_v3_graph.csv
 ```
 
-### Running the Performance evaluation scripts
-Please refer this:
-[README.md](./scripts/README.md)
+### Step 5: Model Training
+Train the GCN model on the causal provenance graphs.
+```bash
+PYTHONPATH=. python3 XPLOG_Collector/scripts/train_detector.py
+# Output: models/gnn_detector_v3.pt
+```
 
+---
 
-### Files and Directories
-- `XPLOG_Agent/bin/`: Contains all the necessary library binaries, BPF object file and the userspace frontend object file compiled by the Makefile from libbpf-bootstrap.
-- `XPLOG_Agent/bin/xlp.skel.h`: Skeleton eBPF header file generated from `xlp.skel.h`. Describes the structure of the ELF binary of the eBPF program. Declares wrapper functions for the `xlp` app over the libbpf functions for loading, attaching, etc. of the eBPF program
-- `Logs/` : Contains the log files.
-- `xlp.bpf.c`: The eBPF program logic, written in C using libbpf C CO-RE
-- `xlp.c`: The frontend of the eBPF program. Contains the code for opening, loading, attaching of the eBPF program to the right hooks. Also contains the logic for handling of the various syscall log + application log events. Writes to the log file.
-- `xlp.h`, `util.h`, `syscall.h`, `filesystem.h` and `buffer.h`: Useful user-defined structs and helper functions.
+## 4. Detection Engine
+The detection suite uses a **Scenario Aggregator** to provide production-level alerting.
 
-### Troubleshooting
+- **Fidelity Check**: The aggregator uses a 5-second sliding window to identify sustained clusters of anomalies.
+- **Hybrid Filter**: Alerts are prioritized if the GNN anomaly is also a B-Side static violation.
+
+To run a final evaluation on your dataset:
+```bash
+PYTHONPATH=. python3 XPLOG_Collector/scripts/benchmark_suite_v3.py
 ```
-make
-  CC       ../bin/xlp.bpf.o
-xlp.bpf.c:1:10: fatal error: vmlinux.h: No such file or directory
-    1 | #include "vmlinux.h"
-      |          ^~~~~~~~~~~
-compilation terminated.
-```
-Go to XPLOG_Agent
-```
-./build.sh
-```
+
+---
+
+## 5. Contact & Citation
+This project is part of a Bachelor of Technology (BTP) thesis at **IIT Kharagpur**.
+**Author**: Mamidi Surya Teja
+**Supervisor**: Dr. Sandip Chakraborty
